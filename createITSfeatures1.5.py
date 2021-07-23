@@ -1,18 +1,67 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri May 14 11:18:59 2021
+Created on Wed Apr 21 08:39:05 2021
 
 @author: mcveigh
 """
+
+#
+# processITS designed to validate ITS sequences and create a feature table that can be imported into gbench
+# User must specify the input filename and the outputfile name. This version uses fasta as the input format
 
 import pandas as pd
 import Bio
 import os
 import sys
+from datetime import datetime
+import functools
 
-#inputfile = sys.argv[1]
-outputfile = sys.argv[1]
-#print("starting parser")
+startTime = datetime.now()
+#print("Start time is ", startTime) 
+
+inputfile = sys.argv[1]
+outputfile = sys.argv[2]
+#print(inputfile)
+#print(outputfile)
+
+from Bio import SeqIO
+sequences = [] 
+sequenceLength = []
+orgname = []
+for seq_record in SeqIO.parse(inputfile, "fasta"):  
+    #seq_record.description = seq_record.annotations["organism"]
+    #seq_record.description = "contains"
+    str_id = seq_record.id      
+    sequences.append(seq_record)
+    seqLength = '%s %i\n' %  (seq_record.id, len(seq_record))
+    sequenceLength.append(seqLength)
+    if seq_record.seq.count("NNNNN"):
+        print(seq_record.id, "contains internal Ns, this may result in incorrect predictions")
+    #orgname = seq_record.annotations["organism"]
+    #if "Giardia" in str(orgname):
+        #print(seq_record.id, "From Giarda sp. and will require special handling")  
+SeqIO.write(sequences, "input.fsa", "fasta")  
+seqlen_str = functools.reduce(lambda a,b : a + b, sequenceLength) 
+f = open('my.seqlen', 'w')
+f.write(seqlen_str)
+f.close()
+  
+#Run CMscan on all sequences
+#print('cmscan1')
+os.system("cmscan --cpu 16 --mid -T 20 --verbose --tblout tblout.df.txt rrna.cm input.fsa > /dev/null")
+#print('cmscan2')
+os.system("cmscan --cpu 16 --mid -T 20 --verbose --anytrunc --tblout tblout.at.txt rrna.cm input.fsa > /dev/null")
+cmscanTime = datetime.now()
+#print("CMscan time is ", cmscanTime) 
+os.system("cat tblout.df.txt tblout.at.txt > tblout.both.txt")
+os.system("perl cmsearch_tblout_deoverlap/cmsearch-deoverlap.pl --maxkeep -s --cmscan tblout.both.txt")
+os.system("head -n2 tblout.both.txt > final.tblout")
+os.system("cat tblout.both.txt.deoverlapped >> final.tblout")
+
+#Add seq Length to cmscan output
+#os.system("esl-seqstat -a ribo-out/ribo-out.ribodbmaker.final.fa | grep ^\\= | awk '{ printf(\"%s %s\\n\", $2, $3); }' > my.seqlen")
+os.system("perl tblout-add.pl -t final.tblout 18 my.seqlen 3 > cmscan_final.tblout")
+
 #Parse the final results of CMscan, sort and write fasta files
 CMscan_output = (r'cmscan_final.tblout')
 CMscan_df = pd.read_csv(CMscan_output,
@@ -99,12 +148,6 @@ rna_found = []
 minus_strand_acc = []
 for seq_record in SeqIO.parse("input.fsa", "fasta"): 
     s = seq_record   
-    SSUstart = []
-    SSUend = []
-    fivestart = []
-    fiveend = []
-    LSUstart = []
-    LSUend = []
     #print("test ", seq_record.id)
 #check for sequences with no rRNA gene
     if seq_record.id not in SSU_RNA_df['accession'].tolist():
@@ -116,53 +159,17 @@ for seq_record in SeqIO.parse("input.fsa", "fasta"):
                 SeqIO.write(rna_not_found, "rna_not_found_seqs", "fasta") 
                 #print(rna_not_found)
     
-#Check for Mixed Strand, Noncontiguous and Misassembled Sequences    
+#Check for Mixed Strand and Misassembled Sequences    
     if seq_record.id in AnyPlus['accession'].tolist():
         if seq_record.id in AnyMinus['accession'].tolist():
             print(seq_record.id, "Mixed strand sequence")
             misassembled.append(s)
             removeacc.append(seq_record.id)
-        if seq_record.id in SSU_RNA_df['accession'].tolist():
-            SSUstart = SSU_RNA_df['seq_from'].iloc[0]
-            SSUend = SSU_RNA_df['seq_to'].iloc[0]
-        if seq_record.id in Five_RNA_df['accession'].tolist():
-            fivestart = Five_RNA_df['seq_from'].iloc[0]
-            fiveend = Five_RNA_df['seq_to'].iloc[0]
-        if seq_record.id in LSU_RNA_df['accession'].tolist():   
-            LSUstart = LSU_RNA_df['seq_from'].iloc[0]
     elif seq_record.id in AnyMinus['accession'].tolist():
         if seq_record.id in AnyPlus['accession'].tolist():
             print(seq_record.id, "Mixed strand sequence")
             misassembled.append(s)
             removeacc.append(seq_record.id)
-        if seq_record.id in SSU_RNA_df['accession'].tolist():
-            SSUstart = SSU_RNA_df['seq_to'].iloc[0]
-            SSUend = SSU_RNA_df['seq_from'].iloc[0]
-        if seq_record.id in Five_RNA_df['accession'].tolist():
-            fivestart = Five_RNA_df['seq_to'].iloc[0]
-            fiveend = Five_RNA_df['seq_from'].iloc[0]
-        if seq_record.id in LSU_RNA_df['accession'].tolist():   
-            LSUstart = LSU_RNA_df['seq_to'].iloc[0]
-    if seq_record.id in SSU_RNA_df['accession'].tolist():
-        if seq_record.id in Five_RNA_df['accession'].tolist():
-            if SSUend > fivestart:
-                print(seq_record.id, "Misassembled sequence")
-                misassembled.append(s)
-                removeacc.append(seq_record.id)
-    if seq_record.id in Five_RNA_df['accession'].tolist():
-        if seq_record.id in LSU_RNA_df['accession'].tolist():
-            if fiveend > LSUstart:
-                print(seq_record.id, "Misassembled sequence")
-                misassembled.append(s)
-                removeacc.append(seq_record.id)
-
-#noncontig seq check
-    if seq_record.id in SSU_RNA_df['accession'].tolist():
-        if seq_record.id in LSU_RNA_df['accession'].tolist():
-            if seq_record.id not in FiveCompleteStrongHit['accession'].tolist():
-                print(seq_record.id, "Noncontiguous sequence")
-                misassembled.append(s)
-                removeacc.append(seq_record.id)      
     SeqIO.write(misassembled, "misassembled_seqs", "fasta")  
     #reject_df = pd.DataFrame([removeacc])
     #reject_df.columns =['accession']
@@ -187,7 +194,6 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
     LSUend = []
     seq_record.description = "contains"
 #parse CMscan output file and write five column feature table
-#plus strand sequences
     if seq_record.id in AnyPlus['accession'].tolist(): 
         if seq_record.id in SSU_RNA_df['accession'].tolist(): 
             if seq_record.id in SSUcomplete['accession'].tolist():    
@@ -242,7 +248,7 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                     stop = stop_df['seq_to'].iloc[0]
                     length = length_df['Length'].iloc[0]
                     if stop < length:
-                        seq_record.description = seq_record.description + ", and internal transcribed spacer 2"
+                        seq_record.description = seq_record.description + " and internal transcribed spacer 2"
                         stop = ">" + str(length)
                     if stop == length:
                         seq_record.description = "5.8S ribosomal RNA"
@@ -291,7 +297,7 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                 if seq_record.id in LSU_RNA_df['accession'].tolist():
                     seq_record.description = seq_record.description + " 5.8S ribosomal RNA, internal transcribed spacer 2"      
                 elif seq_record.id not in LSU_RNA_df['accession'].tolist():
-                    seq_record.description = seq_record.description + " 5.8S ribosomal RNA, and internal transcribed spacer 2"
+                    seq_record.description = seq_record.description + " 5.8S ribosomal RNA and internal transcribed spacer 2"
                     stop = ">" + str(length)
                 print(seq_record.id, "Low scoring complete 5.8S gene found this is likely a bad sequence")
         if seq_record.id in LSU_RNA_df['accession'].tolist():  
@@ -307,7 +313,7 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                         seq_record.description = seq_record.description + " internal transcribed spacer 2 and large subunit ribosomal RNA"
                         start = "<1"
                 elif seq_record.id in Five_RNA_df['accession'].tolist():
-                    seq_record.description = seq_record.description + ", internal transcribed spacer 2, and large subunit ribosomal RNA"
+                    seq_record.description = seq_record.description + ", internal transcribed spacer 2 and large subunit ribosomal RNA"
             elif seq_record.id in LSUpartial['accession'].tolist():
                 stop_df = LSUpartial[(LSUpartial['accession'] == seq_record.id) & (LSUpartial['gene'] == 'LSU_rRNA_eukarya')]
                 LSUstart = stop_df['seq_from'].iloc[0]
@@ -315,14 +321,15 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                 mdlfrom = stop_df['mdl_from'].iloc[0]
                 stop = ">" + str(stop)
                 if seq_record.id not in Five_RNA_df['accession'].tolist():
-                    if LSUstart <= 5:
+                    if LSUstart == 1:
                         seq_record.description = "large subunit ribosomal RNA"
                         start = "<1"
                     else:
                         seq_record.description = seq_record.description + " internal transcribed spacer 2 and large subunit ribosomal RNA"
                         start = "<1"
                 elif seq_record.id in Five_RNA_df['accession'].tolist():
-                    seq_record.description = seq_record.description + ", internal transcribed spacer 2, and large subunit ribosomal RNA"
+                    #seq_record.description = seq_record.description + ", internal transcribed spacer 2 and large subunit ribosomal RNA"
+                    seq_record.description = seq_record.description + " and large subunit ribosomal RNA"
         sequences.append(s)
 #Minus strand sequences        
     if seq_record.id in AnyMinus['accession'].tolist():
@@ -371,7 +378,7 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                     stop = stop_df['seq_to'].iloc[0]
                     length = length_df['Length'].iloc[0]
                     if stop > 1:
-                        seq_record.description = seq_record.description + ", and internal transcribed spacer 2"
+                        seq_record.description = seq_record.description + " and internal transcribed spacer 2"
                         stop = ">1"
                     if stop == 1:
                         seq_record.description = "5.8S ribosomal RNA"
@@ -424,7 +431,7 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                 if seq_record.id in LSU_RNA_df['accession'].tolist():
                     seq_record.description = seq_record.description + " 5.8S ribosomal RNA, internal transcribed spacer 2"      
                 elif seq_record.id not in LSU_RNA_df['accession'].tolist():
-                    seq_record.description = seq_record.description + " 5.8S ribosomal RNA, and internal transcribed spacer 2"
+                    seq_record.description = seq_record.description + " 5.8S ribosomal RNA and internal transcribed spacer 2"
                     stop = "<1" 
                 print(seq_record.id, "Low scoring complete 5.8S gene found this is likely a bad sequence")    
         if seq_record.id in LSU_RNA_df['accession'].tolist():               
@@ -441,7 +448,7 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                         seq_record.description = seq_record.description + " internal transcribed spacer 2 and large subunit ribosomal RNA"
                         start = "<" + str(LSUstart)
                 elif seq_record.id in Five_RNA_df['accession'].tolist():
-                    seq_record.description = seq_record.description + ", internal transcribed spacer 2, and large subunit ribosomal RNA"
+                    seq_record.description = seq_record.description + ", internal transcribed spacer 2 and large subunit ribosomal RNA"
             elif seq_record.id in LSUpartial['accession'].tolist():
                 stop_df = LSUpartial[(LSUpartial['accession'] == seq_record.id) & (LSUpartial['gene'] == 'LSU_rRNA_eukarya')]
                 LSUstart = stop_df['seq_from'].iloc[0]
@@ -460,7 +467,7 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                         seq_record.description = seq_record.description + " internal transcribed spacer 2 and large subunit ribosomal RNA"
                         start = "<" + str(length)
                 elif seq_record.id in Five_RNA_df['accession'].tolist():
-                    seq_record.description = seq_record.description + ", internal transcribed spacer 2, and large subunit ribosomal RNA"
+                    seq_record.description = seq_record.description + ", internal transcribed spacer 2 and large subunit ribosomal RNA"
         sequences.append(s)
         
     #print(seq_record.description, start, stop)

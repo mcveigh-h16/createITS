@@ -25,7 +25,7 @@ rule parse_input_gb:
         sequences = [] 
         orgname = []
         sequencelength = []
-        for seq_record in SeqIO.parse(input.gb_in, "genbank"):    
+        for seq_record in SeqIO.parse(input.gb_in, "fasta"):    
             str_id = seq_record.id
             sequences.append(seq_record)
             seqlen = '%s %i\n' %  (seq_record.id, len(seq_record))
@@ -34,11 +34,11 @@ rule parse_input_gb:
                 print(seq_record.id, "contains internal Ns, this may result in incorrect predictions")
                 with open('log_files/internalNs.log', 'wt') as f:
                     print(seq_record.id, 'contains internal Ns', file=f)
-            orgname = seq_record.annotations["organism"]
-            if "Giardia" in str(orgname):
-                print(seq_record.id, "From Giarda sp. and will require special handling")  
-                with open('log_files/Giardia.log', 'wt') as f:
-                    print(seq_record.id, ' Giardia sp.', file=f)
+            #orgname = seq_record.annotations["organism"]
+            #if "Giardia" in str(orgname):
+                #print(seq_record.id, "From Giarda sp. and will require special handling")  
+                #with open('log_files/Giardia.log', 'wt') as f:
+                    #print(seq_record.id, ' Giardia sp.', file=f)
         SeqIO.write(sequences, output.input_fsa, "fasta")  
         seqlen_str = functools.reduce(lambda a,b : a + b, sequencelength) 
         f = open(output.seqlen, 'w')

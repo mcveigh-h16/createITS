@@ -1,18 +1,67 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri May 14 11:18:59 2021
+Created on Wed Apr 21 08:39:05 2021
 
 @author: mcveigh
 """
+
+#
+# processITS designed to validate ITS sequences and create a feature table that can be imported into gbench
+# User must specify the input filename and the outputfile name. This version uses fasta as the input format
 
 import pandas as pd
 import Bio
 import os
 import sys
+from datetime import datetime
+import functools
 
-#inputfile = sys.argv[1]
-outputfile = sys.argv[1]
-#print("starting parser")
+startTime = datetime.now()
+#print("Start time is ", startTime) 
+
+inputfile = sys.argv[1]
+outputfile = sys.argv[2]
+#print(inputfile)
+#print(outputfile)
+
+from Bio import SeqIO
+sequences = [] 
+sequenceLength = []
+orgname = []
+for seq_record in SeqIO.parse(inputfile, "fasta"):  
+    #seq_record.description = seq_record.annotations["organism"]
+    #seq_record.description = "contains"
+    str_id = seq_record.id      
+    sequences.append(seq_record)
+    seqLength = '%s %i\n' %  (seq_record.id, len(seq_record))
+    sequenceLength.append(seqLength)
+    if seq_record.seq.count("NNNNN"):
+        print(seq_record.id, "contains internal Ns, this may result in incorrect predictions")
+    #orgname = seq_record.annotations["organism"]
+    #if "Giardia" in str(orgname):
+        #print(seq_record.id, "From Giarda sp. and will require special handling")  
+SeqIO.write(sequences, "input.fsa", "fasta")  
+seqlen_str = functools.reduce(lambda a,b : a + b, sequenceLength) 
+f = open('my.seqlen', 'w')
+f.write(seqlen_str)
+f.close()
+  
+#Run CMscan on all sequences
+#print('cmscan1')
+os.system("cmscan --cpu 16 --mid -T 20 --verbose --tblout tblout.df.txt rrna.cm input.fsa > /dev/null")
+#print('cmscan2')
+os.system("cmscan --cpu 16 --mid -T 20 --verbose --anytrunc --tblout tblout.at.txt rrna.cm input.fsa > /dev/null")
+cmscanTime = datetime.now()
+#print("CMscan time is ", cmscanTime) 
+os.system("cat tblout.df.txt tblout.at.txt > tblout.both.txt")
+os.system("perl cmsearch_tblout_deoverlap/cmsearch-deoverlap.pl --maxkeep -s --cmscan tblout.both.txt")
+os.system("head -n2 tblout.both.txt > final.tblout")
+os.system("cat tblout.both.txt.deoverlapped >> final.tblout")
+
+#Add seq Length to cmscan output
+#os.system("esl-seqstat -a ribo-out/ribo-out.ribodbmaker.final.fa | grep ^\\= | awk '{ printf(\"%s %s\\n\", $2, $3); }' > my.seqlen")
+os.system("perl tblout-add.pl -t final.tblout 18 my.seqlen 3 > cmscan_final.tblout")
+
 #Parse the final results of CMscan, sort and write fasta files
 CMscan_output = (r'cmscan_final.tblout')
 CMscan_df = pd.read_csv(CMscan_output,
