@@ -66,7 +66,7 @@ rule run_cmscan_df:
     output: 'cm_out/cm_tblout_{fapart}.df.txt'
     params: 
         cmdb = 'rrna.cm'
-    threads: 32
+    threads: 4
     log: 'log_files/cmscan_df_{fapart}.log'
     shell:
         '''
@@ -76,7 +76,7 @@ rule run_cmscan_df:
           --mid -T 20 --verbose \
           --tblout {output} \
           {params.cmdb} \
-          {input.rm_fa} > {log}
+          {input.rm_fa} > /dev/null 
         ''' 
 
 rule run_cmscan_at:
@@ -85,7 +85,7 @@ rule run_cmscan_at:
     output: 'cm_out/cm_tblout_{fapart}.at.txt'
     params: 
         cmdb = 'rrna.cm'
-    threads: 32
+    threads: 4
     log: 'log_files/cmscan_at_{fapart}.log'
     shell:
         '''
@@ -95,7 +95,7 @@ rule run_cmscan_at:
           --mid -T 20 --verbose --anytrunc \
           --tblout {output} \
           {params.cmdb} \
-          {input.rm_fa} > {log}
+          {input.rm_fa} > /dev/null 
         ''' 
 
 rule cm_deoverlap:

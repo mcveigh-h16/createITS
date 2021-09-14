@@ -1,18 +1,67 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri May 14 11:18:59 2021
+Created on Wed Apr 21 08:39:05 2021
 
 @author: mcveigh
 """
+
+#
+# processITS designed to validate ITS sequences and create a feature table that can be imported into gbench
+# User must specify the input filename and the outputfile name. This version uses fasta as the input format
 
 import pandas as pd
 import Bio
 import os
 import sys
+from datetime import datetime
+import functools
 
-#inputfile = sys.argv[1]
-outputfile = sys.argv[1]
-#print("starting parser")
+startTime = datetime.now()
+print("Start time is ", startTime) 
+
+inputfile = sys.argv[1]
+outputfile = sys.argv[2]
+#print(inputfile)
+#print(outputfile)
+
+from Bio import SeqIO
+sequences = [] 
+sequenceLength = []
+orgname = []
+for seq_record in SeqIO.parse(inputfile, "fasta"):  
+    #seq_record.description = seq_record.annotations["organism"]
+    #seq_record.description = "contains"
+    str_id = seq_record.id      
+    sequences.append(seq_record)
+    seqLength = '%s %i\n' %  (seq_record.id, len(seq_record))
+    sequenceLength.append(seqLength)
+    if seq_record.seq.count("NNNNN"):
+        print(seq_record.id, "contains internal Ns, this may result in incorrect predictions")
+    #orgname = seq_record.annotations["organism"]
+    #if "Giardia" in str(orgname):
+        #print(seq_record.id, "From Giarda sp. and will require special handling")  
+SeqIO.write(sequences, "input.fsa", "fasta")  
+seqlen_str = functools.reduce(lambda a,b : a + b, sequenceLength) 
+f = open('my.seqlen', 'w')
+f.write(seqlen_str)
+f.close()
+  
+#Run CMscan on all sequences
+#print('cmscan1')
+os.system("cmscan --cpu 16 --mid -T 20 --verbose --tblout tblout.df.txt rrna.cm input.fsa > /dev/null")
+#print('cmscan2')
+os.system("cmscan --cpu 16 --mid -T 20 --verbose --anytrunc --tblout tblout.at.txt rrna.cm input.fsa > /dev/null")
+cmscanTime = datetime.now()
+print("CMscan time is ", cmscanTime) 
+os.system("cat tblout.df.txt tblout.at.txt > tblout.both.txt")
+os.system("perl cmsearch_tblout_deoverlap/cmsearch-deoverlap.pl --maxkeep -s --cmscan tblout.both.txt")
+os.system("head -n2 tblout.both.txt > final.tblout")
+os.system("cat tblout.both.txt.deoverlapped >> final.tblout")
+
+#Add seq Length to cmscan output
+#os.system("esl-seqstat -a ribo-out/ribo-out.ribodbmaker.final.fa | grep ^\\= | awk '{ printf(\"%s %s\\n\", $2, $3); }' > my.seqlen")
+os.system("perl tblout-add.pl -t final.tblout 18 my.seqlen 3 > cmscan_final.tblout")
+
 #Parse the final results of CMscan, sort and write fasta files
 CMscan_output = (r'cmscan_final.tblout')
 CMscan_df = pd.read_csv(CMscan_output,
@@ -99,15 +148,16 @@ removeacc = []
 rna_not_found = []
 rna_found = []
 minus_strand_acc = []
+
 for seq_record in SeqIO.parse("input.fsa", "fasta"): 
-    s = seq_record   
+    s = seq_record
     SSUstart = []
     SSUend = []
     fivestart = []
     fiveend = []
     LSUstart = []
     LSUend = []
-    #print("test ", seq_record.id)
+    #print("test1 ", seq_record.id, SSUstart, SSUend, fivestart, fiveend, LSUstart, LSUend)
 #check for sequences with no rRNA gene
     if seq_record.id not in SSU_RNA_df['accession'].tolist():
         if seq_record.id not in Five_RNA_df['accession'].tolist():
@@ -125,38 +175,54 @@ for seq_record in SeqIO.parse("input.fsa", "fasta"):
             misassembled.append(s)
             removeacc.append(seq_record.id)
         if seq_record.id in SSU_RNA_df['accession'].tolist():
-            SSUstart = SSU_RNA_df['seq_from'].iloc[0]
-            SSUend = SSU_RNA_df['seq_to'].iloc[0]
+            start_df = SSU_RNA_df[(SSU_RNA_df['accession'] == seq_record.id) & (SSU_RNA_df['gene'] == 'SSU_rRNA_eukarya')]
+            SSUstart = int(start_df['seq_from'].iloc[0])
+            SSUend = int(start_df['seq_to'].iloc[0])
+            #print(seq_record.id, " SSU ", SSUstart, SSUend)
         if seq_record.id in Five_RNA_df['accession'].tolist():
-            fivestart = Five_RNA_df['seq_from'].iloc[0]
-            fiveend = Five_RNA_df['seq_to'].iloc[0]
-        if seq_record.id in LSU_RNA_df['accession'].tolist():   
-            LSUstart = LSU_RNA_df['seq_from'].iloc[0]
+            startfive_df = Five_RNA_df[(Five_RNA_df['accession'] == seq_record.id) & (Five_RNA_df['gene'] == '5_8S_rRNA')]
+            fivestart = int(startfive_df['seq_from'].iloc[0])
+            fiveend = int(startfive_df['seq_to'].iloc[0])
+            #print(seq_record.id, " FIVE ", fivestart, fiveend)
+        if seq_record.id in LSU_RNA_df['accession'].tolist(): 
+            startLSU_df = LSU_RNA_df[(LSU_RNA_df['accession'] == seq_record.id) & (LSU_RNA_df['gene'] == 'LSU_rRNA_eukarya')]
+            LSUstart = int(startLSU_df['seq_from'].iloc[0])
+            LSUend = int(startLSU_df['seq_to'].iloc[0])
+            #print(seq_record.id, " LSU ", LSUstart, LSUend)
     elif seq_record.id in AnyMinus['accession'].tolist():
         if seq_record.id in AnyPlus['accession'].tolist():
             print(seq_record.id, "Mixed strand sequence")
             misassembled.append(s)
             removeacc.append(seq_record.id)
         if seq_record.id in SSU_RNA_df['accession'].tolist():
-            SSUstart = SSU_RNA_df['seq_to'].iloc[0]
-            SSUend = SSU_RNA_df['seq_from'].iloc[0]
+            start_df = SSU_RNA_df[(SSU_RNA_df['accession'] == seq_record.id) & (SSU_RNA_df['gene'] == 'SSU_rRNA_eukarya')]
+            SSUstart = int(start_df['seq_to'].iloc[0])
+            SSUend = int(start_df['seq_from'].iloc[0])
         if seq_record.id in Five_RNA_df['accession'].tolist():
-            fivestart = Five_RNA_df['seq_to'].iloc[0]
-            fiveend = Five_RNA_df['seq_from'].iloc[0]
-        if seq_record.id in LSU_RNA_df['accession'].tolist():   
-            LSUstart = LSU_RNA_df['seq_to'].iloc[0]
+            startfive_df = Five_RNA_df[(Five_RNA_df['accession'] == seq_record.id) & (Five_RNA_df['gene'] == '5_8S_rRNA')]
+            fivestart = startfive_df['seq_to'].iloc[0]
+            fiveend = startfive_df['seq_from'].iloc[0]
+        if seq_record.id in LSU_RNA_df['accession'].tolist():  
+            startLSU_df = LSU_RNA_df[(LSU_RNA_df['accession'] == seq_record.id) & (LSU_RNA_df['gene'] == 'LSU_rRNA_eukarya')]
+            LSUstart = startLSU_df['seq_to'].iloc[0]
+            LSUend = startLSU_df['seq_from'].iloc[0]
+    #print("test2 ", seq_record.id, SSUstart, SSUend, fivestart, fiveend, LSUstart, LSUend)
+    
     if seq_record.id in SSU_RNA_df['accession'].tolist():
-        if seq_record.id in Five_RNA_df['accession'].tolist():
+       if seq_record.id in Five_RNA_df['accession'].tolist():
             if SSUend > fivestart:
-                print(seq_record.id, "Misassembled sequence")
-                misassembled.append(s)
-                removeacc.append(seq_record.id)
+               print(seq_record.id, " ssu spans ", SSUstart, SSUend)
+               print(seq_record.id, " five spans ", fivestart, fiveend)
+               print(seq_record.id, "Misassembled sequence 1")
+               misassembled.append(s)
+               removeacc.append(seq_record.id)
     if seq_record.id in Five_RNA_df['accession'].tolist():
         if seq_record.id in LSU_RNA_df['accession'].tolist():
             if fiveend > LSUstart:
-                print(seq_record.id, "Misassembled sequence")
+                print(seq_record.id, "Misassembled sequence 2")
                 misassembled.append(s)
                 removeacc.append(seq_record.id)
+
 #noncontig seq check
     if seq_record.id in SSU_RNA_df['accession'].tolist():
         if seq_record.id in LSU_RNA_df['accession'].tolist():
@@ -176,8 +242,6 @@ line = []
 for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
     start = []
     stop = []
-    #SSUstart = []
-    #SSUend = []
     #ITS1start = []
     #ITS1end = []
     #fivestart = []
@@ -504,5 +568,6 @@ for ip in minus_strand_acc:
 file = open(outputfile, "w")
 file.writelines(line)
 file.close()
-            
+scriptTime = datetime.now()
+print("script time is ", scriptTime)             
             

@@ -110,7 +110,9 @@ SSUfivefound = SSUpartial[SSUpartial['mdl_from'] == 1]
 SSUfivepartial =  SSUpartial[SSUpartial['trunc'] == "5'"]
 SSUbothpartial = SSUpartial[SSUpartial['trunc'] == "5'&3'"]
 LSUendfound = LSUpartial[(LSUpartial['strand'] == "+") & (LSUpartial['mdl_to'] == 3401)]
-
+LSUFivePartial = LSUpartial[LSUpartial['trunc'] == "5'"]
+LSUThreePartial = LSUpartial[LSUpartial['trunc'] == "3'"]
+LSUbothpartial = LSUpartial[LSUpartial['trunc'] == "5'&3'"]
 five_minus_strand = FiveCompleteStrongHit[FiveCompleteStrongHit['strand'] != "+"]
 five_minus_any = Five_RNA_df[Five_RNA_df['strand'] != "+"]
 five_plus_any = Five_RNA_df[Five_RNA_df['strand'] == "+"]
@@ -234,6 +236,9 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
     #ITS2end = []
     LSUstart = []
     LSUend = []
+    Length = []
+    mdlfrom = []
+    mdlto = []
     seq_record.description = "contains"
 #parse CMscan output file and write five column feature table
 #plus strand sequences
@@ -258,6 +263,11 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                 length = SSUpartial['Length'].iloc[0]
                 mdlfrom = SSUpartial['mdl_from'].iloc[0]
                 mdlto = SSUpartial['mdl_to'].iloc[0]
+                print(seq_record.id, start, stop, mdlfrom, mdlto, length)
+                #if seq_record.id in SSUbothpartial['accession'].tolist():
+                    #seq_record.description = "small subunit ribosomal RNA"
+                    #start = "<1"
+                    #stop = ">" + str(stop) 
                 if seq_record.id in SSUfivefound['accession'].tolist():
                     if (start == 1) & (stop == length):
                         seq_record.description = "small subunit ribosomal RNA" 
@@ -275,6 +285,9 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                         seq_record.description = "small subunit ribosomal RNA"
                         start = "<" + str(start)
                         stop = ">" + str(stop)
+                    else:
+                        #print(seq_record.id, start, stop, length)
+                        print(seq_record.id, " is incomplete on both ends but the RNA prediction does not extend to the end")
         if seq_record.id in Five_RNA_df['accession'].tolist(): 
             if seq_record.id in FiveCompleteStrongHit['accession'].tolist():  
                 if seq_record.id not in SSU_RNA_df['accession'].tolist():
@@ -364,11 +377,17 @@ for seq_record in SeqIO.parse("rna_found.seqs", "fasta"):
                 mdlfrom = stop_df['mdl_from'].iloc[0]
                 stop = ">" + str(stop)
                 if seq_record.id not in Five_RNA_df['accession'].tolist():
-                    if LSUstart <= 5:
-                        seq_record.description = "large subunit ribosomal RNA"
+                    if seq_record.id in LSUbothpartial['accession'].tolist():
                         start = "<1"
-                    else:
-                        seq_record.description = seq_record.description + " internal transcribed spacer 2 and large subunit ribosomal RNA"
+                        seq_record.description = "large subunit ribosomal RNA"
+                    if seq_record.id in LSUThreePartial['accession'].tolist():               
+                        if LSUstart == "1":
+                            seq_record.description = "large subunit ribosomal RNA"
+                        else: 
+                            seq_record.description = seq_record.description + " internal transcribed spacer 2 and large subunit ribosomal RNA"
+                            start = "<1"
+                    elif seq_record.id in LSUFivePartial['accession'].tolist():
+                        seq_record.description = "large subunit ribosomal RNA"
                         start = "<1"
                 elif seq_record.id in Five_RNA_df['accession'].tolist():
                     seq_record.description = seq_record.description + ", internal transcribed spacer 2, and large subunit ribosomal RNA"
