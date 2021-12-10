@@ -1,5 +1,5 @@
 # createITS
-cCreateITSfeatures1.0.py
+CreateITSfeatures1.0.py
 Python application to analyze a gbk file containing eukaryotic nuclear ribosomal RNA and/or internal transcribed spacers (ITS1/ITS2) and generate a five column feature table that can be imported into gbench. 
 Is it designed to work with any of these scenarios:
 SSU
