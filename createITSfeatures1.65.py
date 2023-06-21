@@ -3,11 +3,10 @@
 Created on Wed Apr 21 08:39:05 2021
 
 @author: mcveigh
-"""
 
-#
-# processITS designed to validate ITS sequences and create a feature table that can be imported into gbench
-# User must specify the input filename and the outputfile name. This version uses fasta as the input format
+    processITS designed to validate ITS sequences and create a feature table that can be imported into gbench
+    User must specify the input filename and the outputfile name. This version uses fasta as the input format
+"""
 
 import pandas as pd
 import Bio
@@ -45,8 +44,11 @@ seqlen_str = functools.reduce(lambda a,b : a + b, sequenceLength)
 f = open('my.seqlen', 'w')
 f.write(seqlen_str)
 f.close()
-  
-#Run CMscan on all sequences
+
+"""  
+Run CMscan on all sequences
+"""
+
 #print('cmscan1')
 os.system("cmscan --cpu 16 --mid -T 20 --verbose --tblout tblout.df.txt rrna.cm input.fsa > /dev/null")
 #print('cmscan2')
@@ -58,11 +60,16 @@ os.system("perl cmsearch_tblout_deoverlap/cmsearch-deoverlap.pl --maxkeep -s --c
 os.system("head -n2 tblout.both.txt > final.tblout")
 os.system("cat tblout.both.txt.deoverlapped >> final.tblout")
 
-#Add seq Length to cmscan output
+"""
+Add lengths to cmscan out files
+"""
 #os.system("esl-seqstat -a ribo-out/ribo-out.ribodbmaker.final.fa | grep ^\\= | awk '{ printf(\"%s %s\\n\", $2, $3); }' > my.seqlen")
 os.system("perl tblout-add.pl -t final.tblout 18 my.seqlen 3 > cmscan_final.tblout")
 
-#Parse the final results of CMscan, sort and write fasta files
+"""
+Parse the final results of CMscan, sort and write fasta files
+"""
+
 CMscan_output = (r'cmscan_final.tblout')
 CMscan_df = pd.read_csv(CMscan_output,
                         sep='\t',
@@ -140,6 +147,10 @@ AnyPlus = pd.concat(Plusframes)
 #print("I found LSU sequences on the minus strand\n ", LSUminus)
 #print("I found SSU sequences on the minus strand\n ", SSUminus)
 
+"""
+Report sequences with extra sequence on the 5' end of SSU or sequences with extra sequence on the 3' end of LSU
+"""
+
 #Sequences with extra sequence on the 5' the extends beyond position 1 of the SSU model
 SSU_not5_end = SSU_RNA_df[(SSU_RNA_df['seq_from'] != 1) & (SSU_RNA_df['strand'] == "+")]
 SSUextra = SSU_not5_end[SSU_not5_end['mdl_from'] == 1]
@@ -151,6 +162,11 @@ print("sequences with extra data on the 5' end of LSU\n", LSU_not5_end)
 LSUextra=LSU_RNA_df.loc[(LSU_RNA_df['seq_to'] != LSU_RNA_df['Length']) & (LSU_RNA_df['mdl_to'] == 3401) & (LSU_RNA_df['mdl_from'] == 1)]
 print("sequences with extra data on the 3' end of LSU\n", LSUextra)
 
+"""
+Iterate through the sequences and evaluate each
+Check for sequences with errors
+Evaluate plus strand and minus strand
+"""
 
 from Bio import SeqIO
 sequences = []  
@@ -178,8 +194,9 @@ for seq_record in SeqIO.parse("input.fsa", "fasta"):
                 removeacc.append(seq_record.id)
                 SeqIO.write(rna_not_found, "rna_not_found_seqs", "fasta") 
                 #print(rna_not_found)
-    
-#Check for Mixed Strand, Noncontiguous and Misassembled Sequences    
+
+#Check for Mixed Strand, Noncontiguous and Misassembled Sequences 
+
     if seq_record.id in AnyPlus['accession'].tolist():
         if seq_record.id in AnyMinus['accession'].tolist():
             print(seq_record.id, "Mixed strand sequence")

@@ -76,7 +76,7 @@ rule run_cmscan_df:
           --mid -T 20 --verbose \
           --tblout {output} \
           {params.cmdb} \
-          {input.rm_fa} > /dev/null 
+          {input.rm_fa} > {log}
         ''' 
 
 rule run_cmscan_at:
@@ -95,7 +95,7 @@ rule run_cmscan_at:
           --mid -T 20 --verbose --anytrunc \
           --tblout {output} \
           {params.cmdb} \
-          {input.rm_fa} > /dev/null 
+          {input.rm_fa} > {log}
         ''' 
 
 rule cm_deoverlap:

@@ -146,7 +146,7 @@ SSUextra = SSU_not5_end[SSU_not5_end['mdl_from'] == 1]
 print("sequences with extra data on the 5' end of SSU\n", SSUextra)
 #Sequnces with extra data on the 5' or 3' end beyond the end of LSU
 LSU_RNA_df = CMscan_df2[(CMscan_df2['gene'] == "LSU_rRNA_eukarya") & (CMscan_df2['strand'] == "+")]
-LSU_not5_end = LSU_RNA_df[(LSU_RNA_df['mdl_from'] != 1) & (LSU_RNA_df['strand'] == "+")]
+LSU_not5_end = LSU_RNA_df[(LSU_RNA_df['mdl_from'] != 1) & (LSU_RNA_df['strand'] == "+") & (LSU_RNA_df['seq_from'] != 1)]
 print("sequences with extra data on the 5' end of LSU\n", LSU_not5_end)
 LSUextra=LSU_RNA_df.loc[(LSU_RNA_df['seq_to'] != LSU_RNA_df['Length']) & (LSU_RNA_df['mdl_to'] == 3401) & (LSU_RNA_df['mdl_from'] == 1)]
 print("sequences with extra data on the 3' end of LSU\n", LSUextra)
