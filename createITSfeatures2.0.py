@@ -90,6 +90,8 @@ reverse_seq = []
 reverse_acc = []
 forward_seq = []
 
+#elif seq_record.id in FiveMinus can report a low scoring minus strand even if a strong complete predication is present. Need
+#to change that. Maybe just remove that part
 for seq_record in SeqIO.parse("input.fsa", "fasta"): 
     s = seq_record
     if seq_record.id in FiveCompleteMinus['accession'].tolist():
@@ -319,7 +321,6 @@ for seq_record in SeqIO.parse("plus_strand_seqs", "fasta"):
         rna_found.append(s)
         SeqIO.write(rna_found, "rna_found.seqs", "fasta")         
         length = combined_df['Length'].iloc[0]
-        
         """
         Generate feature table
         """   
@@ -327,6 +328,8 @@ for seq_record in SeqIO.parse("plus_strand_seqs", "fasta"):
             start_df = SSUcomplete[(SSUcomplete['accession'] == seq_record.id) & (SSUcomplete['gene'] == 'SSU_rRNA_eukarya')]
             start = start_df['seq_from'].iloc[0]
             stop = start_df['seq_to'].iloc[0]
+            length = start_df['Length'].iloc[0]
+            print (seq_record.id, length)
             if (start == 1) & (stop == length):
                 seq_record.description = "small subunit ribosomal RNA" 
             if seq_record.id in Five_RNA_df['accession'].tolist():
@@ -343,6 +346,7 @@ for seq_record in SeqIO.parse("plus_strand_seqs", "fasta"):
             #mdlto = SSUpartial['mdl_to'].iloc[0]
             SSUstart = SSUpartial['seq_from'].iloc[0]
             SSUend = SSUpartial['seq_to'].iloc[0]
+            length = SSUpartial['Length'].iloc[0]
                       
           
             if (SSUstart == 1) & (SSUend == length):
@@ -357,9 +361,9 @@ for seq_record in SeqIO.parse("plus_strand_seqs", "fasta"):
                     start = "<" + str(SSUstart)
                 elif seq_record.id not in Five_RNA_df['accession'].tolist():
                     start = "<" + str(start)
-                    print('We entered this loop')
+                    print('We entered the has SSU but not 5.8S rRNA loop')
                     if SSUend != length:
-                        print('Did we get into here')
+                        print('Did we get into here SSU is partial and not matching the ends')
                         seq_record.description = seq_record.description + " small subunit ribosomal RNA and internal transcribed spacer 1"
                         start = "<" + str(SSUstart)
                         stop = ">" + str(length)  
@@ -430,6 +434,7 @@ for seq_record in SeqIO.parse("plus_strand_seqs", "fasta"):
             elif seq_record.id in Five_RNA_df['accession'].tolist():
                 seq_record.description = seq_record.description + ", internal transcribed spacer 2 and large subunit ribosomal RNA"
 
+#LSU only that is truncated is reported but spans/defline will be incorrect in output file
         elif seq_record.id in LSUpartial['accession'].tolist():
             stop_df = LSUpartial[(LSUpartial['accession'] == seq_record.id) & (LSUpartial['gene'] == 'LSU_rRNA_eukarya')]
             LSUstart = stop_df['seq_from'].iloc[0]
@@ -437,8 +442,9 @@ for seq_record in SeqIO.parse("plus_strand_seqs", "fasta"):
             mdlfrom = stop_df['mdl_from'].iloc[0]
             #length = stop_df['Length'].iloc[0]
             stop = ">" + str(stop)
+            print("start-stop", LSUstart, stop)
             if seq_record.id not in Five_RNA_df['accession'].tolist():
-                if LSUstart == length:
+                if LSUstart == 1:
                     seq_record.description = "large subunit ribosomal RNA"
                     if mdlfrom == 1:
                         start = LSUstart
@@ -446,7 +452,7 @@ for seq_record in SeqIO.parse("plus_strand_seqs", "fasta"):
                         start = "<" + str(LSUstart)
                 else:
                    seq_record.description = seq_record.description + " internal transcribed spacer 2 and large subunit ribosomal RNA"
-                   start = "<" + str(length)
+                   start = "<" + str(LSUstart)
             elif seq_record.id in Five_RNA_df['accession'].tolist():
                 if seq_record.id in Five_RNA_df['accession'].tolist():
                    seq_record.description = seq_record.description + ", internal transcribed spacer 2 and large subunit ribosomal RNA"
